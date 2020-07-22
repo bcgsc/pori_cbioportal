@@ -1,0 +1,3 @@
+
+recursive-include pori_cbioportal *
+include README.md
