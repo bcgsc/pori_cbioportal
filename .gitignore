@@ -21,3 +21,6 @@ env
 # misc
 .DS_STORE
 
+# other
+.cbioportal_cache
+data

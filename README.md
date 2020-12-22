@@ -1,8 +1,8 @@
 
-# Pori Cbioportal
+# PORI Cbioportal
 
-
-
+This python package uses the IPR and GraphKB PORI adaptors to create PORI reports from dumps
+of cbioportal data.
 
 ## Getting Started
 
@@ -10,27 +10,27 @@
 
 clone this repository
 
-```
+```bash
 git clone ssh://git@svn.bcgsc.ca:7999/dat/pori_cbioportal.git
 cd pori_cbioportal
 ```
 
 create a virtual environment
 
-```
+```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
 install the package and its development dependencies
 
-```
+```bash
 pip install -e .[dev]
 ```
 
 Run the tests
 
-```
+```bash
 pytest tests
 ```
 
@@ -74,4 +74,3 @@ buildout
 ```
 
 This will create a directory `bin` with the executable scripts
-
