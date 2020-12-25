@@ -1,12 +1,47 @@
 
-# PORI Cbioportal
+# PORI cBioportal
 
 This python package uses the IPR and GraphKB PORI adaptors to create PORI reports from dumps
 of cbioportal data.
 
 ## Getting Started
 
-### Install (For developers)
+### Install via pip
+
+```bash
+pip install pori_cbioportal
+```
+
+### Download Study Data
+
+Study data should be downloaded from cbioportal, for example
+
+```bash
+wget https://cbioportal-datahub.s3.amazonaws.com/laml_tcga_pan_can_atlas_2018.tar.gz
+tar -xvzf laml_tcga_pan_can_atlas_2018.tar.gz
+```
+
+### Generate Reports
+
+This is then used to generate individual reports for all patients included in the study.
+Note to do this you will need access to both a GraphKB server for matching and an IPR
+server for upload.
+
+```bash
+pori_cbioportal acc_tcga_pan_can_atlas_2018 \
+    acc_tcga_pan_can_atlas_2018/data_clinical_patient.txt \
+    acc_tcga_pan_can_atlas_2018/data_clinical_sample.txt \
+    --password $PASSWORD \
+    --discrete_cna acc_tcga_pan_can_atlas_2018data_CNA.txt \
+    --continuous_cna acc_tcga_pan_can_atlas_2018/data_log2CNA.txt \
+    --expression acc_tcga_pan_can_atlas_2018/data_RNA_Seq_v2_mRNA_median_all_sample_Zscores.txt \
+    --small_mutations acc_tcga_pan_can_atlas_2018/data_mutations_extended.txt \
+    --fusions acc_tcga_pan_can_atlas_2018/data_fusions.txt \
+```
+
+## Getting Started (For developers)
+
+### Install
 
 clone this repository
 
@@ -34,7 +69,7 @@ Run the tests
 pytest tests
 ```
 
-## Deployment (Publishing)
+### Deployment (Publishing)
 
 Install the deployment dependencies
 
@@ -54,7 +89,7 @@ Upload the distibutions to the package server (-r defined in your pypirc)
 twine upload -r bcgsc dist/*
 ```
 
-## Deployment (Scripts)
+### Deployment (Scripts)
 
 A buildout config is included by default which will build all console scripts defined
 in the package.
