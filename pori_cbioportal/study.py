@@ -279,7 +279,7 @@ def create_report(
     password: str,
     ipr_url: str,
     zscore_threshold=2,
-    percentile_threshold=90,
+    percentile_threshold=97.5,
     copy_amplification_threshold=2,
     copy_homd_threshold=-2,
     **kwargs,
@@ -306,7 +306,6 @@ def create_report(
             columns={'percentile': 'diseasePercentile', 'zscore': 'diseaseZScore'}
         )
         expression['kbCategory'] = expression.apply(categorize_expression, axis=1)
-        expression = expression.fillna('')
         expression = expression.drop_duplicates(['gene', 'kbCategory']).to_dict('records')
     else:
         logger.warning(f'no expression data found for sample ({sample_id})')
