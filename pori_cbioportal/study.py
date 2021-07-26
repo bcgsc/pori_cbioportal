@@ -2,7 +2,7 @@
 Process study download data files
 """
 import re
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 import pandas
 from graphkb.match import INPUT_COPY_CATEGORIES, INPUT_EXPRESSION_CATEGORIES
@@ -119,13 +119,15 @@ def load_small_mutations(filename, **kwargs) -> pandas.DataFrame:
             return ''
         return row['gene'] + ':' + row['proteinChange']
 
-    def reject_bad_cds(cds):
-        if pandas.isnull(cds):
+    def hgvs_cds(row):
+        if pandas.isnull(row.hgvsCds):
             return ''
-        return cds
+        if ':' not in row.hgvsCds:
+            return f'{row.transcript}:{row.hgvsCds}'
+        return row.hgvsCds
 
     mutations_df['hgvsProtein'] = mutations_df.apply(hgvs_protein, axis=1)
-    mutations_df['hgvsCds'] = mutations_df.hgvsCds.apply(reject_bad_cds)
+    mutations_df['hgvsCds'] = mutations_df.apply(hgvs_cds, axis=1)
     mutations_df['refSeq'] = mutations_df.refSeq.replace('-', '')
     mutations_df['altSeq'] = mutations_df.altSeq.replace('-', '')
     mutations_df['hgvsGenomic'] = ''  # TODO: Compose genomic hgvs notation where possible
@@ -304,6 +306,7 @@ def create_report(
     copy_amplification_threshold=2,
     copy_homd_threshold=-2,
     study_size: Optional[int] = None,
+    debugging_filename: Optional[str] = None,
     **kwargs,
 ):
     def categorize_expression(row):
@@ -315,7 +318,7 @@ def create_report(
                 return INPUT_EXPRESSION_CATEGORIES.DOWN
         return ''
 
-    if sample_id in expression_df.columns:
+    if expression_df is not None and sample_id in expression_df.columns:
         expression = expression_df[['gene', 'gene_id', sample_id, 'type']].copy()
         expression = expression[~expression.gene.isin(gene_conflicts)]
         expression = expression[~pandas.isnull(expression.gene)]
@@ -336,7 +339,7 @@ def create_report(
     small_mutations = small_mutations_df[small_mutations_df['sample_id'] == sample_id].copy()
     small_mutations = small_mutations.drop(columns=['sample_id'])
     small_mutations = small_mutations[~small_mutations.gene.isin(gene_conflicts)]
-    small_mutations = small_mutations.to_dict('records')
+    small_mutations = small_mutations.fillna('').to_dict('records')
 
     def categorize_copy_change(copy_change: int):
         if copy_change >= copy_amplification_threshold:
@@ -362,16 +365,20 @@ def create_report(
         copy_variants = copy_variants.drop_duplicates(
             ['gene', 'kbCategory', 'copyChange', 'log2Cna']
         )
-        copy_variants = copy_variants.fillna('')
-        copy_variants = copy_variants.to_dict('records')
+        copy_variants = drop_fields_with_value(
+            copy_variants.fillna('').to_dict('records'), 'log2Cna'
+        )
     else:
         copy_variants = []
 
-    fusions = fusions_df[fusions_df.sample_id == sample_id].copy().drop(columns=['sample_id'])
-    fusions = fusions[~fusions.gene1.isin(gene_conflicts)]
-    fusions = fusions[~fusions.gene2.isin(gene_conflicts)]
-    fusions = fusions.fillna('')
-    fusions = fusions.to_dict('records')
+    if fusions_df is not None:
+        fusions = fusions_df[fusions_df.sample_id == sample_id].copy().drop(columns=['sample_id'])
+        fusions = fusions[~fusions.gene1.isin(gene_conflicts)]
+        fusions = fusions[~fusions.gene2.isin(gene_conflicts)]
+        fusions = fusions.fillna('')
+        fusions = fusions.to_dict('records')
+    else:
+        fusions = []
 
     clinical = clinical_df[clinical_df.sample_id == sample_id].to_dict('records')
     if len(clinical) != 1:
@@ -380,30 +387,32 @@ def create_report(
         )
     clinical = clinical[0]
     content = main.create_report(
-        patient_id=patient_id,
-        kb_disease_match=clinical['diagnosis'],
-        project=ipr_project,
-        expression_variant_rows=expression,
-        copy_variant_rows=copy_variants,
-        structural_variant_rows=fusions,
-        small_mutation_rows=small_mutations,
         generate_therapeutics=True,
-        optional_content={
+        output_json_path=debugging_filename,
+        content={
+            'expressionVariants': replace_values(expression, 'kbCategory'),
+            'copyVariants': replace_values(copy_variants, 'kbCategory'),
+            'structuralVariants': replace_values(fusions, 'exon1', 'exon2'),
+            'smallMutations': small_mutations,
             'comparators': [
                 {'analysisRole': 'expression (disease)', 'name': study_id, 'size': study_size}
             ],
             'patientInformation': {
                 'gender': clinical.get('gender'),
-                'diagnosis': re.sub(r' \(NOS\)$', ', NOS', clinical.get('diagnosis')),
-                'physician': '',
+                'diagnosis': re.sub(r' \(NOS\)$', ', NOS', clinical['diagnosis']),
+                'physician': 'not specified',
                 'caseType': 'not specified',
-                'biopsySite': clinical.get('biopsySite'),
-                'age': clinical.get('age'),
+                'biopsySite': clinical.get('biopsySite', ''),
+                'age': clinical.get('age', ''),
             },
+            'project': ipr_project,
+            'kbDiseaseMatch': clinical['diagnosis'],
+            'patientId': patient_id,
             'alternateIdentifier': clinical.get('alternateIdentifier'),
             'biopsyName': sample_id,
-            'subtyping': clinical.get('subtyping'),
-            'ploidy': clinical.get('ploidy'),
+            'subtyping': clinical.get('subtyping', ''),
+            'ploidy': clinical.get('ploidy', ''),
+            'template': 'TCGA-cBioportal',
         },
         username=username,
         password=password,
@@ -438,17 +447,22 @@ def find_conflicting_gene_names(
         continuous_copy_variants_filename,
         expression_filename,
     ]:
-        df = pandas.read_csv(filename, delimiter='\t')
-        df = df[[GENE_NAME, GENE_ID]].copy()
-        genes_df = pandas.concat([genes_df, df])
+        if not filename:
+            continue
+        df = read_csv(filename)
+        if GENE_ID in df.columns:
+            df = df[[GENE_NAME, GENE_ID]].copy()
+            genes_df = pandas.concat([genes_df, df])
 
-    df = pandas.read_csv(fusions_filename, delimiter='\t')
-    genes_df = pandas.concat([genes_df, df[[GENE_NAME, GENE_ID]].copy()])
-    df[[GENE_NAME, 'Hugo_Symbol2']] = df.Fusion.str.split('-', 1, expand=True)
-    genes_df = pandas.concat([genes_df, df[[GENE_NAME]].copy()])
-    genes_df = pandas.concat(
-        [genes_df, df[['Hugo_Symbol2']].rename(columns={'Hugo_Symbol2': GENE_NAME}).copy()]
-    )
+    if fusions_filename:
+        df = read_csv(fusions_filename)
+        if GENE_ID in df.columns:
+            genes_df = pandas.concat([genes_df, df[[GENE_NAME, GENE_ID]].copy()])
+            df[[GENE_NAME, 'Hugo_Symbol2']] = df.Fusion.str.split('-', 1, expand=True)
+            genes_df = pandas.concat([genes_df, df[[GENE_NAME]].copy()])
+            genes_df = pandas.concat(
+                [genes_df, df[['Hugo_Symbol2']].rename(columns={'Hugo_Symbol2': GENE_NAME}).copy()]
+            )
     genes_df = genes_df.drop_duplicates()
     genes_df = genes_df.dropna(subset=[GENE_ID])
     genes_df = genes_df.dropna(subset=[GENE_NAME])
@@ -470,6 +484,7 @@ def generate_reports(
     ipr_url: str,
     ipr_project: str,
     patients_subset: Optional[List[str]] = [],
+    strict: bool = False,
     **kwargs,
 ):
     logger.info(f'generating study ({study_id}) reports')
@@ -482,21 +497,28 @@ def generate_reports(
         expression_filename,
         fusions_filename,
     )
-    logger.warning(
-        f'ignoring {len(gene_conflicts)} gene names with conflicting definitions: {", ".join(sorted(list(gene_conflicts)))}'
-    )
+    if gene_conflicts:
+        logger.warning(
+            f'ignoring {len(gene_conflicts)} gene names with conflicting definitions: {", ".join(sorted(list(gene_conflicts)))}'
+        )
 
-    expression_df = load_zscore_data(expression_filename)
+    if expression_filename:
+        expression_df = load_zscore_data(expression_filename)
+    else:
+        expression_df = None
 
     small_mutations_df = load_small_mutations(small_mutations_filename)
     copy_variants_df = load_copy_variants(
         discrete_copy_variants_filename, continuous_copy_variants_filename,
     )
-    fusions_df = load_fusions(fusions_filename)
+    if fusions_filename:
+        fusions_df = load_fusions(fusions_filename)
+    else:
+        fusions_df = None
 
     patients_filter = {p.lower() for p in (patients_subset or [])}
     sample_count = clinical_df.sample_id.nunique()
-    for index, row in clinical_df.iterrows():
+    for _, row in clinical_df.iterrows():
         if patients_filter and row.patientId.lower() not in patients_filter:
             logger.warning(
                 f'skipping patient {row.patientId} not in patients selected subset {patients_subset}'
@@ -522,5 +544,7 @@ def generate_reports(
                 **kwargs,
             )
         except Exception as err:
+            if strict:
+                raise err
             logger.error(err)
             logger.info('skipping to the next report')

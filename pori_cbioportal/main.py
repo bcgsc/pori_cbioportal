@@ -60,6 +60,7 @@ def command_interface():
         required=bool(not os.environ.get('USER')),
         help='The username for logging in to GraphKB and IPR',
     )
+    parser.add_argument('--debugging_filename', help='path to write the JSON that was attempted to upload to IPR to on a failure')
     parser.add_argument(
         '--password', required=True, help='The password for logging in to GraphKB and IPR'
     )
