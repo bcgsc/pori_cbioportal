@@ -1,7 +1,7 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 # Dependencies required to use your package
-INSTALL_REQS = ['ipr', 'pandas', 'graphkb', 'matplotlib', 'seaborn']
+INSTALL_REQS = ['ipr >=3.0.0, <4.0.0', 'pandas', 'graphkb', 'matplotlib', 'seaborn']
 
 # Dependencies required for development
 DEV_REQS = ['flake8', 'black', 'mypy']
@@ -16,8 +16,9 @@ long_description = ''
 long_description_content_type = 'text/markdown'
 
 try:
-    import m2r
     import re
+
+    import m2r
 
     long_description = m2r.parse_from_file('README.md')
     long_description = re.sub(
