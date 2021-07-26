@@ -43,7 +43,9 @@ server for upload.
 ```bash
 pori_cbioportal laml_tcga_pan_can_atlas_2018 \
     --study_id "LAML TCGA" \
-    --password $PASSWORD
+    --password $PASSWORD \
+    --ipr_url https://YOUR_IPR_API_HOST/api \
+    --graphkb_url https://YOUR_GRAPHKB_API_HOST/api
 ```
 
 The loader will expect default names for the files but this can be overwritten with the other command line arguments. See the help menu for more options

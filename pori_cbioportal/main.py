@@ -7,7 +7,7 @@ from .util import LOG_LEVELS
 
 
 def command_interface():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--study_id', help='The study ID (ex. "BRCA TCGA PANCAN (2018)")')
     parser.add_argument(
         'data_folder', help='path to the folder containing the cbioportal export files'
@@ -21,46 +21,43 @@ def command_interface():
     parser.add_argument(
         '--patient_data',
         default='data_clinical_patient.txt',
-        help='The clinical patient data for this study (ex. data_clinical_patient.txt)',
+        help='The clinical patient data for this study',
     )
     parser.add_argument(
         '--sample_data',
         default='data_clinical_sample.txt',
-        help='The clinical sample data for this study (ex. data_clinical_sample.txt)',
+        help='The clinical sample data for this study',
     )
     parser.add_argument(
         '--expression',
         default='data_RNA_Seq_v2_mRNA_median_all_sample_Zscores.txt',
-        help='The mRNA RNA Seq zscore data. (ex. data_RNA_Seq_v2_mRNA_median_all_sample_Zscores.txt)',
+        help='The mRNA RNA Seq zscore data.',
     )
     parser.add_argument(
-        '--small_mutations',
-        default='data_mutations_extended.txt',
-        help='The small mutation data (ex. data_mutations_extended.txt)',
+        '--small_mutations', default='data_mutations_extended.txt', help='The small mutation data',
     )
     parser.add_argument(
-        '--discrete_cna',
-        default='data_CNA.txt',
-        help='The discrete copy variant data (ex. data_CNA.txt)',
+        '--discrete_cna', default='data_CNA.txt', help='The discrete copy variant data',
     )
     parser.add_argument(
         '--continuous_cna',
-        help='The continuous (log2cna) copy variant data (ex. data_log2CNA.txt)',
+        help='The continuous (log2cna) copy variant data',
         default='data_log2CNA.txt',
     )
     parser.add_argument(
         '--ipr_project', help='The IPR project to upload this report to', default='TEST'
     )
-    parser.add_argument(
-        '--fusions', '-f', help='The fusion data (ex. data_fusions.txt)', default='data_fusions.txt'
-    )
+    parser.add_argument('--fusions', '-f', help='The fusion data', default='data_fusions.txt')
     parser.add_argument(
         '--username',
         default=os.environ.get('USER'),
         required=bool(not os.environ.get('USER')),
         help='The username for logging in to GraphKB and IPR',
     )
-    parser.add_argument('--debugging_filename', help='path to write the JSON that was attempted to upload to IPR to on a failure')
+    parser.add_argument(
+        '--debugging_filename',
+        help='path to write the JSON that was attempted to upload to IPR to on a failure',
+    )
     parser.add_argument(
         '--password', required=True, help='The password for logging in to GraphKB and IPR'
     )
@@ -113,5 +110,5 @@ def command_interface():
         graphkb_url=args.graphkb_url,
         patients_subset=args.patients_subset,
         strict=args.strict,
-        debugging_filename=args.debugging_filename
+        debugging_filename=args.debugging_filename,
     )
