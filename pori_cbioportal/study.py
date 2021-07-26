@@ -10,7 +10,7 @@ from ipr import main
 from ipr.connection import IprConnection
 
 from .expression import load_zscore_data, upload_expression_density_plots
-from .util import logger
+from .util import add_optional_columns, logger, read_csv
 
 GENE_NAME = 'Hugo_Symbol'
 GENE_ID = 'Entrez_Gene_Id'
@@ -19,17 +19,11 @@ GENE_ID = 'Entrez_Gene_Id'
 def load_copy_variants(
     filename_discrete: str, filename_log2cna: Optional[str] = None
 ) -> pandas.DataFrame:
-    logger.info(f'reading: (discrete CNA) {filename_discrete}')
-    discrete_df = pandas.read_csv(
-        filename_discrete, delimiter='\t', dtype={GENE_NAME: 'string', GENE_ID: 'string'}
-    )
+    discrete_df = read_csv(filename_discrete, dtype={GENE_NAME: 'string', GENE_ID: 'string'})
     discrete_df['type'] = 'discrete'
 
     if filename_log2cna:
-        logger.info(f'reading: (continuous CNA) {filename_log2cna}')
-        log2cna_df = pandas.read_csv(
-            filename_log2cna, delimiter='\t', dtype={GENE_NAME: 'string', GENE_ID: 'string'}
-        )
+        log2cna_df = read_csv(filename_log2cna, dtype={GENE_NAME: 'string', GENE_ID: 'string'})
         log2cna_df['type'] = 'log2cna'
 
         assert log2cna_df.columns.tolist() == discrete_df.columns.tolist()
@@ -41,11 +35,8 @@ def load_copy_variants(
 
 
 def load_small_mutations(filename, **kwargs) -> pandas.DataFrame:
-    logger.info(f'reading: {filename}')
-    mutations_df = pandas.read_csv(
+    mutations_df = read_csv(
         filename,
-        delimiter='\t',
-        comment='#',
         dtype={
             't_alt_count': float,
             't_ref_count': float,
@@ -177,10 +168,8 @@ def load_small_mutations(filename, **kwargs) -> pandas.DataFrame:
 
 
 def load_fusions(filename, **kwargs) -> pandas.DataFrame:
-    logger.info(f'reading: {filename}')
-    mutations_df = pandas.read_csv(
+    mutations_df = read_csv(
         filename,
-        delimiter='\t',
         dtype={
             'frame': 'string',
             'Tumor_Sample_Barcode': 'string',
@@ -237,8 +226,9 @@ def load_fusions(filename, **kwargs) -> pandas.DataFrame:
 
 
 def load_clinical_data(patients_filename, samples_filename) -> pandas.DataFrame:
-    logger.info(f'reading: {patients_filename}')
-    patients_df = pandas.read_csv(patients_filename, delimiter='\t', comment='#')
+    patients_df = read_csv(patients_filename)
+
+    add_optional_columns(patients_df, ['OTHER_PATIENT_ID', 'SUBTYPE', 'SEX', 'DAYS_TO_BIRTH'], '')
     patients_df = patients_df.rename(
         columns={
             'SEX': 'gender',
@@ -249,15 +239,15 @@ def load_clinical_data(patients_filename, samples_filename) -> pandas.DataFrame:
     )
 
     def days_to_age(days):
-        if pandas.isnull(days):
-            return None
+        if pandas.isnull(days) or days == '':
+            return ''
         else:
-            return abs(int(round(days / 365, 0)))
+            return str(abs(int(round(days / 365, 0))))
 
     patients_df['age'] = patients_df.DAYS_TO_BIRTH.apply(days_to_age)
     patients_df = patients_df.reset_index()
-    logger.info(f'reading: {samples_filename}')
-    samples_df = pandas.read_csv(samples_filename, delimiter='\t', comment='#')
+    samples_df = read_csv(samples_filename)
+    add_optional_columns(samples_df, ['Tissue Source Site'], '')
     samples_df = samples_df.rename(
         columns={
             'PATIENT_ID': 'patientId',
@@ -277,6 +267,22 @@ def load_clinical_data(patients_filename, samples_filename) -> pandas.DataFrame:
         suffixes=(False, False),
     )
     return clinical_df
+
+
+def replace_values(rows: List[Dict], *fields: str, current_value='', replacement_value=None):
+    for row in rows:
+        for field in fields:
+            if row[field] == current_value:
+                row[field] = replacement_value
+    return rows
+
+
+def drop_fields_with_value(rows: List[Dict], *fields: str, value=''):
+    for row in rows:
+        for field in fields:
+            if field in row and row[field] == value:
+                del row[field]
+    return rows
 
 
 def create_report(
@@ -421,7 +427,7 @@ def find_conflicting_gene_names(
     are used consistently throughout the variant files we must remove any genes that have conflicting
     definitions based solely on the gene name
     """
-    genes_df = pandas.read_csv(small_mutations_filename, delimiter='\t')
+    genes_df = read_csv(small_mutations_filename)
     genes_df = genes_df[
         ['SYMBOL']
     ].copy()  # Gene in small mutations is ensembl ID which is not helpful

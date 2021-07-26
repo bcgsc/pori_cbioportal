@@ -7,15 +7,14 @@ import seaborn
 from ipr.connection import IprConnection
 from matplotlib import pyplot as plt
 
-from .util import logger
+from .util import logger, read_csv
 
 GENE_NAME = 'Hugo_Symbol'
 GENE_ID = 'Entrez_Gene_Id'
 
 
 def load_zscore_data(filename: str) -> pandas.DataFrame:
-    logger.info(f'reading: {filename}')
-    df = pandas.read_csv(filename, delimiter='\t', dtype={GENE_NAME: 'string', GENE_ID: 'string'})
+    df = read_csv(filename, dtype={GENE_NAME: 'string', GENE_ID: 'string'})
     df = df.rename(columns={GENE_NAME: 'gene', GENE_ID: 'gene_id'})
     df['type'] = 'zscore'
     # calculate the percentiles
