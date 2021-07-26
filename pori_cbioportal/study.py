@@ -2,7 +2,7 @@
 Process study download data files
 """
 import re
-from typing import Iterable
+from typing import Iterable, List, Optional
 
 import pandas
 from graphkb.match import INPUT_COPY_CATEGORIES, INPUT_EXPRESSION_CATEGORIES
@@ -16,7 +16,9 @@ GENE_NAME = 'Hugo_Symbol'
 GENE_ID = 'Entrez_Gene_Id'
 
 
-def load_copy_variants(filename_discrete, filename_log2cna=None) -> pandas.DataFrame:
+def load_copy_variants(
+    filename_discrete: str, filename_log2cna: Optional[str] = None
+) -> pandas.DataFrame:
     logger.info(f'reading: (discrete CNA) {filename_discrete}')
     discrete_df = pandas.read_csv(
         filename_discrete, delimiter='\t', dtype={GENE_NAME: 'string', GENE_ID: 'string'}
@@ -38,11 +40,12 @@ def load_copy_variants(filename_discrete, filename_log2cna=None) -> pandas.DataF
     return copy_varints_df
 
 
-def load_small_mutations(filename, ploidy=2) -> pandas.DataFrame:
+def load_small_mutations(filename, **kwargs) -> pandas.DataFrame:
     logger.info(f'reading: {filename}')
     mutations_df = pandas.read_csv(
         filename,
         delimiter='\t',
+        comment='#',
         dtype={
             't_alt_count': float,
             't_ref_count': float,
@@ -83,6 +86,7 @@ def load_small_mutations(filename, ploidy=2) -> pandas.DataFrame:
             'null',
             '.',
         ],
+        **kwargs,
     )
     mutations_df = mutations_df.rename(
         columns={
@@ -101,7 +105,7 @@ def load_small_mutations(filename, ploidy=2) -> pandas.DataFrame:
             'n_depth': 'normalDepth',
             't_depth': 'tumourDepth',
             'Reference_Allele': 'refSeq',
-            'Tumor_Seq_Allele1': 'altSeq',
+            'Allele': 'altSeq',
             'Start_Position': 'startPosition',
             'End_Position': 'endPosition',
             'NCBI_Build': 'ncbiBuild',
@@ -162,9 +166,9 @@ def load_small_mutations(filename, ploidy=2) -> pandas.DataFrame:
         if row.proteinChange:
             return row.proteinChange
         if row.hgvsCds:
-            return row.hgvsCds.split(':')[1]
+            return row.hgvsCds.split(':')[1] if ':' in row.hgvsCds else row.hgvsCds
         if row.hgvsGenomic:
-            return row.hgvsGenomic.split(':')[1]
+            return row.hgvsGenomic.split(':')[1] if ':' in row.hgvsGenomic else row.hgvsGenomic
         return row.proteinChange
 
     mutations_df['proteinChange'] = mutations_df.apply(choose_main_variant, axis=1)
@@ -172,7 +176,7 @@ def load_small_mutations(filename, ploidy=2) -> pandas.DataFrame:
     return mutations_df.drop_duplicates()
 
 
-def load_fusions(filename) -> pandas.DataFrame:
+def load_fusions(filename, **kwargs) -> pandas.DataFrame:
     logger.info(f'reading: {filename}')
     mutations_df = pandas.read_csv(
         filename,
@@ -184,21 +188,22 @@ def load_fusions(filename) -> pandas.DataFrame:
             'DNA_support': 'string',
             'RNA_support': 'string',
         },
+        **kwargs,
     )
     mutations_df = mutations_df.rename(
         columns={'Frame': 'frame', 'Tumor_Sample_Barcode': 'sample_id', 'Fusion': 'fusion'}
     )
 
-    def gene1(fusion):
-        return fusion.split('-')[0]
+    gene_pattern = r'^(?P<gene1>[A-Za-z0-9_]+(-(\d+|AS1))?)(-(?P<gene2>\S+))?(\s+(?P<eventType>\S+)(\s-\sArcher)?)?$'
+    gene_df = mutations_df.fusion.str.extract(gene_pattern).fillna('').replace('nan', '')
+    gene_df.loc[gene_df.eventType == '', ['eventType']] = 'fusion'
+    # not certain what they mean by truncation, using the broader "fusion" type
+    gene_df.loc[gene_df.eventType == 'truncation', ['eventType']] = 'fusion'
 
-    def gene2(fusion):
-        if '-' not in fusion:
-            return ''
-        return '-'.join(fusion.split('-')[1:])
-
-    mutations_df['gene1'] = mutations_df.fusion.apply(gene1)
-    mutations_df['gene2'] = mutations_df.fusion.apply(gene2)
+    gene_df['gene2'] = gene_df.apply(
+        lambda row: row.gene2 if row.gene2 != 'intragenic' else row.gene1, axis=1
+    )
+    mutations_df = pandas.concat([mutations_df, gene_df], axis=1)
 
     def omic_support(detected_in):
         return bool('DNA' in detected_in and 'RNA' in detected_in)
@@ -206,6 +211,16 @@ def load_fusions(filename) -> pandas.DataFrame:
     def detected_in(row):
         if pandas.isnull(row['DNA_support']) or pandas.isnull(row['RNA_support']):
             return ''
+
+        if row['DNA_support'] == 'yes' and row['RNA_support'] == 'unknown':
+            return 'DNA'
+        if row['DNA_support'] == 'yes' and row['RNA_support'] == 'yes':
+            return 'DNA/RNA'
+        if row['DNA_support'] == 'unknown' and row['RNA_support'] == 'unknown':
+            return ''
+        if row['DNA_support'] == 'unknown' and row['RNA_support'] == 'yes':
+            return 'RNA'
+        print(row)
         raise NotImplementedError(
             'these values have never been not blank yet. need to implement handling'
         )
@@ -214,11 +229,10 @@ def load_fusions(filename) -> pandas.DataFrame:
     mutations_df['detectedIn'] = mutations_df.apply(detected_in, axis=1)
     mutations_df['omicSupport'] = mutations_df.detectedIn.apply(omic_support)
 
-    mutations_df = mutations_df[['gene1', 'gene2', 'frame', 'sample_id']]
+    mutations_df = mutations_df[['gene1', 'gene2', 'frame', 'sample_id', 'eventType']]
     mutations_df['exon1'] = ''
     mutations_df['exon2'] = ''
     mutations_df['breakpoint'] = ''
-    mutations_df['eventType'] = 'fusion'
     return mutations_df.drop_duplicates()
 
 
@@ -278,10 +292,12 @@ def create_report(
     username: str,
     password: str,
     ipr_url: str,
+    ipr_project: str = 'TEST',
     zscore_threshold=2,
     percentile_threshold=97.5,
     copy_amplification_threshold=2,
     copy_homd_threshold=-2,
+    study_size: Optional[int] = None,
     **kwargs,
 ):
     def categorize_expression(row):
@@ -316,7 +332,7 @@ def create_report(
     small_mutations = small_mutations[~small_mutations.gene.isin(gene_conflicts)]
     small_mutations = small_mutations.to_dict('records')
 
-    def categorize_copy_change(copy_change):
+    def categorize_copy_change(copy_change: int):
         if copy_change >= copy_amplification_threshold:
             return INPUT_COPY_CATEGORIES.AMP
         elif copy_change <= copy_homd_threshold:
@@ -360,13 +376,16 @@ def create_report(
     content = main.create_report(
         patient_id=patient_id,
         kb_disease_match=clinical['diagnosis'],
-        project='TEST',
+        project=ipr_project,
         expression_variant_rows=expression,
         copy_variant_rows=copy_variants,
         structural_variant_rows=fusions,
         small_mutation_rows=small_mutations,
+        generate_therapeutics=True,
         optional_content={
-            'comparators': [{'analysisRole': 'expression (disease)', 'name': study_id}],
+            'comparators': [
+                {'analysisRole': 'expression (disease)', 'name': study_id, 'size': study_size}
+            ],
             'patientInformation': {
                 'gender': clinical.get('gender'),
                 'diagnosis': re.sub(r' \(NOS\)$', ', NOS', clinical.get('diagnosis')),
@@ -432,21 +451,23 @@ def find_conflicting_gene_names(
 
 
 def generate_reports(
-    study_id,
-    patients_filename,
-    samples_filename,
-    continuous_copy_variants_filename,
-    discrete_copy_variants_filename,
-    small_mutations_filename,
-    expression_filename,
-    fusions_filename,
-    username,
-    password,
-    ipr_url,
+    study_id: str,
+    patients_filename: str,
+    samples_filename: str,
+    continuous_copy_variants_filename: str,
+    discrete_copy_variants_filename: str,
+    small_mutations_filename: str,
+    expression_filename: str,
+    fusions_filename: str,
+    username: str,
+    password: str,
+    ipr_url: str,
+    ipr_project: str,
+    patients_subset: Optional[List[str]] = [],
     **kwargs,
 ):
     logger.info(f'generating study ({study_id}) reports')
-    clinical_df = load_clinical_data(patients_filename, samples_filename,)
+    clinical_df = load_clinical_data(patients_filename, samples_filename)
 
     gene_conflicts = find_conflicting_gene_names(
         continuous_copy_variants_filename,
@@ -467,7 +488,14 @@ def generate_reports(
     )
     fusions_df = load_fusions(fusions_filename)
 
+    patients_filter = {p.lower() for p in (patients_subset or [])}
+    sample_count = clinical_df.sample_id.nunique()
     for index, row in clinical_df.iterrows():
+        if patients_filter and row.patientId.lower() not in patients_filter:
+            logger.warning(
+                f'skipping patient {row.patientId} not in patients selected subset {patients_subset}'
+            )
+            continue
         logger.info(f'creating a report for {row["patientId"]} {row["sample_id"]}')
         try:
             create_report(
@@ -480,9 +508,11 @@ def generate_reports(
                 copy_variants_df,
                 fusions_df,
                 gene_conflicts,
-                username,
-                password,
-                ipr_url,
+                study_size=sample_count,
+                ipr_project=ipr_project,
+                username=username,
+                password=password,
+                ipr_url=ipr_url,
                 **kwargs,
             )
         except Exception as err:

@@ -1,14 +1,13 @@
-import tempfile
 import os
+import tempfile
 from typing import Dict
 
 import pandas
-from matplotlib import pyplot as plt
 import seaborn
 from ipr.connection import IprConnection
+from matplotlib import pyplot as plt
 
 from .util import logger
-
 
 GENE_NAME = 'Hugo_Symbol'
 GENE_ID = 'Entrez_Gene_Id'
@@ -86,10 +85,16 @@ def upload_expression_density_plots(
 
     with tempfile.TemporaryDirectory() as tmpdir:
         files = {}
+        data = {}
 
         for gene in sorted(list(expression_genes_to_plot)):
             plot_name = os.path.join(tmpdir, f'{gene}.png')
             plot_expression_density(expression_df, sample_id, gene, plot_name)
-            files[f'expDensity.{gene}'] = plot_name
+            key = f'expDensity.{gene}'
+            files[key] = plot_name
+            data[f'{key}_title'] = f'{gene} RNA Expression Z-Scores'
+            data[
+                f'{key}_caption'
+            ] = f'Cohort RNA Expression values of {gene}. The asterisk indicates the bin containing the expression value for this patient.'
         report_id = content['ident']
-        ipr_conn.post_images(report_id, files)
+        ipr_conn.post_images(report_id, files, data)

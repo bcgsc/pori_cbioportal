@@ -1,7 +1,8 @@
 import argparse
-import os
-from .study import generate_reports
 import logging
+import os
+
+from .study import generate_reports
 from .util import LOG_LEVELS
 
 
@@ -41,6 +42,9 @@ def command_interface():
         required=True,
     )
     parser.add_argument(
+        '--ipr_project', help='The IPR project to upload this report to', default='TEST'
+    )
+    parser.add_argument(
         '--fusions', '-f', help='The fusion data (ex. data_fusions.txt)', required=True,
     )
     parser.add_argument(
@@ -59,6 +63,9 @@ def command_interface():
         '--graphkb_url',
         default='https://graphkbstaging-api.bcgsc.ca/api',
         help='The GraphKB API url',
+    )
+    parser.add_argument(
+        '--patients_subset', nargs='+', help='Only create reports for a subset of patient IDs'
     )
     args = parser.parse_args()
 
@@ -79,6 +86,8 @@ def command_interface():
         fusions_filename=args.fusions,
         username=args.username,
         password=args.password,
+        ipr_project=args.ipr_project,
         ipr_url=args.ipr_url,
         graphkb_url=args.graphkb_url,
+        patients_subset=args.patients_subset,
     )
