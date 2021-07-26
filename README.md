@@ -1,5 +1,7 @@
-
 # PORI cBioportal
+
+This repository is part of the [platform for oncogenomic reporting and interpretation](https://github.com/bcgsc/pori).
+
 
 This python package uses the IPR and GraphKB PORI adaptors to create PORI reports from dumps
 of cbioportal data.
