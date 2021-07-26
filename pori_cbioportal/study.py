@@ -509,7 +509,8 @@ def generate_reports(
 
     small_mutations_df = load_small_mutations(small_mutations_filename)
     copy_variants_df = load_copy_variants(
-        discrete_copy_variants_filename, continuous_copy_variants_filename,
+        discrete_copy_variants_filename,
+        continuous_copy_variants_filename,
     )
     if fusions_filename:
         fusions_df = load_fusions(fusions_filename)

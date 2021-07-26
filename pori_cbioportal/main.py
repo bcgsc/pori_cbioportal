@@ -34,10 +34,14 @@ def command_interface():
         help='The mRNA RNA Seq zscore data.',
     )
     parser.add_argument(
-        '--small_mutations', default='data_mutations_extended.txt', help='The small mutation data',
+        '--small_mutations',
+        default='data_mutations_extended.txt',
+        help='The small mutation data',
     )
     parser.add_argument(
-        '--discrete_cna', default='data_CNA.txt', help='The discrete copy variant data',
+        '--discrete_cna',
+        default='data_CNA.txt',
+        help='The discrete copy variant data',
     )
     parser.add_argument(
         '--continuous_cna',
