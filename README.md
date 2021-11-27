@@ -1,6 +1,6 @@
 # PORI cBioportal
 
-![build](https://github.com/bcgsc/pori_cbioportal/workflows/test/badge.svg) [![PyPi](https://img.shields.io/pypi/v/pori_cbioportal.svg)](https://pypi.org/project/pori_cbioportal)
+![build](https://github.com/bcgsc/pori_cbioportal/workflows/test/badge.svg) [![PyPi](https://img.shields.io/pypi/v/pori_cbioportal.svg)](https://pypi.org/project/pori_cbioportal) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5730701.svg)](https://doi.org/10.5281/zenodo.5730701)
 
 
 This repository is part of the [Platform for Oncogenomic Reporting and Interpretation (PORI)](https://bcgsc.github.io/pori).
